@@ -1,29 +1,29 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * All rights reserved.</center></h2>
-  *
-  * This software component is licensed by ST under Ultimate Liberty license
-  * SLA0044, the "License"; You may not use this file except in compliance with
-  * the License. You may obtain a copy of the License at:
-  *                             www.st.com/SLA0044
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
+ * All rights reserved.</center></h2>
+ *
+ * This software component is licensed by ST under Ultimate Liberty license
+ * SLA0044, the "License"; You may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at:
+ *                             www.st.com/SLA0044
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "stm32746g_discovery_qspi.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,12 +46,12 @@ QSPI_HandleTypeDef hqspi;
 
 UART_HandleTypeDef huart1;
 
-osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
 __IO uint8_t CmdCplt, RxCplt, TxCplt, StatusMatch, TimeOut;
 
 /* Buffer used for transmission */
-uint8_t aTxBuffer[] = " ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT**** ";
+uint8_t aTxBuffer[] =
+		" ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT****  ****QSPI communication based on IT**** ";
 
 /* Buffer used for reception */
 uint8_t aRxBuffer[BUFFERSIZE];
@@ -62,8 +62,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_QUADSPI_Init(void);
 static void MX_USART1_UART_Init(void);
-void StartDefaultTask(void const * argument);
-
 /* USER CODE BEGIN PFP */
 static void QSPI_WriteEnable(QSPI_HandleTypeDef *hqspi);
 static void QSPI_AutoPollingMemReady(QSPI_HandleTypeDef *hqspi);
@@ -73,11 +71,10 @@ static void CPU_CACHE_Enable(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-int _write (int file, uint8_t *ptr, uint16_t len)
-{
-    HAL_UART_Transmit(&huart1, ptr, len,10);
+int _write(int file, uint8_t *ptr, uint16_t len) {
+	HAL_UART_Transmit(&huart1, ptr, len, 10);
 
-    return len;
+	return len;
 }
 /* USER CODE END 0 */
 
@@ -112,48 +109,51 @@ int main(void)
   MX_QUADSPI_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  setbuf(stdout, NULL);
-    printf("TEST DATA\r\n");
+	setbuf(stdout, NULL);
+	printf("TEST DATA\r\n");
+
+
+	QSPI_CommandTypeDef sCommand;
+		uint32_t address = 0;
+		uint16_t index;
+		__IO uint8_t step = 0;
+		uint32_t data[100];
+		uint32_t writedata[100];
+		for (int i = 0; i < 400; i = i + 4) {
+			writedata[i / 4] |= i;
+			writedata[i / 4] |= (i + 1) << 8;
+			writedata[i / 4] |= (i + 2)<< 16;
+			writedata[i / 4] |= (i + 3)<< 24;
+		}
+//		printf("\r\nWrite Start \r\n");
+//
+//		for (int i = 0; i < 100; i++) {
+//			printf("%x ", writedata[i]);
+//		}
+
+		BSP_QSPI_Init();
+		HAL_Delay(1000);
+		BSP_QSPI_Erase_Block(0);
+		printf("Write REsult %d \r\n", BSP_QSPI_Write(writedata, 0, sizeof(data)));
+		printf("\r\nWrite End \r\n");
+		if (BSP_QSPI_GetStatus() == 0) {
+			printf("Read REsult %d \r\n", BSP_QSPI_Read(data, 0, sizeof(data)));
+			for (int i = 0; i < 100; i++) {
+				printf("%08x : %04x \r\n",i, data[i]);
+			}
+			HAL_Delay(1000);
+		}
+		printf("SPI STATUS %d \r\n", BSP_QSPI_GetStatus());
   /* USER CODE END 2 */
 
-  /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
-
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
-
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 4096);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-
-  /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
-
-  /* Start scheduler */
-  osKernelStart();
-
-  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1) {
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -306,361 +306,8 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/**
-  * @brief  Command completed callbacks.
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-void HAL_QSPI_CmdCpltCallback(QSPI_HandleTypeDef *hqspi)
-{
-  CmdCplt++;
-}
 
-/**
-  * @brief  Rx Transfer completed callbacks.
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-void HAL_QSPI_RxCpltCallback(QSPI_HandleTypeDef *hqspi)
-{
-  RxCplt++;
-}
-
-/**
-  * @brief  Tx Transfer completed callbacks.
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-void HAL_QSPI_TxCpltCallback(QSPI_HandleTypeDef *hqspi)
-{
-  TxCplt++;
-}
-
-/**
-  * @brief  Status Match callbacks
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-void HAL_QSPI_StatusMatchCallback(QSPI_HandleTypeDef *hqspi)
-{
-  StatusMatch++;
-}
-
-/**
-  * @brief  This function sends a Write Enable and waits until it is effective.
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-static void QSPI_WriteEnable(QSPI_HandleTypeDef *hqspi)
-{
-  QSPI_CommandTypeDef     sCommand;
-  QSPI_AutoPollingTypeDef sConfig;
-
-  /* Enable write operations ------------------------------------------ */
-  sCommand.InstructionMode   = QSPI_INSTRUCTION_1_LINE;
-  sCommand.Instruction       = WRITE_ENABLE_CMD;
-  sCommand.AddressMode       = QSPI_ADDRESS_NONE;
-  sCommand.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
-  sCommand.DataMode          = QSPI_DATA_NONE;
-  sCommand.DummyCycles       = 0;
-  sCommand.DdrMode           = QSPI_DDR_MODE_DISABLE;
-  sCommand.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
-  sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
-
-  if (HAL_QSPI_Command(&hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /* Configure automatic polling mode to wait for write enabling ---- */
-  sConfig.Match           = 0x02;
-  sConfig.Mask            = 0x02;
-  sConfig.MatchMode       = QSPI_MATCH_MODE_AND;
-  sConfig.StatusBytesSize = 1;
-  sConfig.Interval        = 0x10;
-  sConfig.AutomaticStop   = QSPI_AUTOMATIC_STOP_ENABLE;
-
-  sCommand.Instruction    = READ_STATUS_REG_CMD;
-  sCommand.DataMode       = QSPI_DATA_1_LINE;
-
-  if (HAL_QSPI_AutoPolling(&hqspi, &sCommand, &sConfig, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief  This function reads the SR of the memory and awaits the EOP.
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-static void QSPI_AutoPollingMemReady(QSPI_HandleTypeDef *hqspi)
-{
-  QSPI_CommandTypeDef     sCommand;
-  QSPI_AutoPollingTypeDef sConfig;
-
-  /* Configure automatic polling mode to wait for memory ready ------ */
-  sCommand.InstructionMode   = QSPI_INSTRUCTION_1_LINE;
-  sCommand.Instruction       = READ_STATUS_REG_CMD;
-  sCommand.AddressMode       = QSPI_ADDRESS_NONE;
-  sCommand.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
-  sCommand.DataMode          = QSPI_DATA_1_LINE;
-  sCommand.DummyCycles       = 0;
-  sCommand.DdrMode           = QSPI_DDR_MODE_DISABLE;
-  sCommand.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
-  sCommand.SIOOMode         = QSPI_SIOO_INST_EVERY_CMD;
-
-  sConfig.Match           = 0x00;
-  sConfig.Mask            = 0x01;
-  sConfig.MatchMode       = QSPI_MATCH_MODE_AND;
-  sConfig.StatusBytesSize = 1;
-  sConfig.Interval        = 0x10;
-  sConfig.AutomaticStop   = QSPI_AUTOMATIC_STOP_ENABLE;
-
-  if (HAL_QSPI_AutoPolling_IT(&hqspi, &sCommand, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief  This function configures the dummy cycles on memory side.
-  * @param  hqspi: QSPI handle
-  * @retval None
-  */
-static void QSPI_DummyCyclesCfg(QSPI_HandleTypeDef *hqspi)
-{
-  QSPI_CommandTypeDef sCommand;
-  uint8_t reg;
-
-  /* Read Volatile Configuration register --------------------------- */
-  sCommand.InstructionMode   = QSPI_INSTRUCTION_1_LINE;
-  sCommand.Instruction       = READ_VOL_CFG_REG_CMD;
-  sCommand.AddressMode       = QSPI_ADDRESS_NONE;
-  sCommand.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
-  sCommand.DataMode          = QSPI_DATA_1_LINE;
-  sCommand.DummyCycles       = 0;
-  sCommand.DdrMode           = QSPI_DDR_MODE_DISABLE;
-  sCommand.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
-  sCommand.SIOOMode         = QSPI_SIOO_INST_EVERY_CMD;
-  sCommand.NbData            = 1;
-
-  if (HAL_QSPI_Command(&hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  if (HAL_QSPI_Receive(&hqspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /* Enable write operations ---------------------------------------- */
-  QSPI_WriteEnable(&hqspi);
-
-  /* Write Volatile Configuration register (with new dummy cycles) -- */
-  sCommand.Instruction = WRITE_VOL_CFG_REG_CMD;
-  MODIFY_REG(reg, 0xF0, (DUMMY_CLOCK_CYCLES_READ_QUAD << POSITION_VAL(0xF0)));
-
-  if (HAL_QSPI_Command(&hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  if (HAL_QSPI_Transmit(&hqspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-static void CPU_CACHE_Enable(void)
-{
-  /* Enable I-Cache */
-  SCB_EnableICache();
-
-  /* Enable D-Cache */
-  SCB_EnableDCache();
-}
 /* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
-{
-  /* USER CODE BEGIN 5 */
-	  QSPI_CommandTypeDef sCommand;
-	  uint32_t address = 0;
-	  uint16_t index;
-	  __IO uint8_t step = 0;
-  /* Infinite loop */
-  for(;;)
-  {
-	  switch(step)
-	 	  	      {
-	 	  	        case 0:
-	 	  	          CmdCplt = 0;
-
-	 	  	          /* Initialize Reception buffer --------------------------------------- */
-	 	  	          for (index = 0; index < BUFFERSIZE; index++)
-	 	  	          {
-	 	  	            aRxBuffer[index] = 0;
-	 	  	          }
-	 	  	          printf("QSPI Write ENable Start\r\n");
-	 	  	          /* Enable write operations ------------------------------------------- */
-	 	  	          QSPI_WriteEnable(&hqspi);
-	 	  	          printf("QSPI Write ENable END\r\n");
-	 	  	          /* Erasing Sequence -------------------------------------------------- */
-	 	  	          sCommand.Instruction = SECTOR_ERASE_CMD;
-	 	  	          sCommand.AddressMode = QSPI_ADDRESS_1_LINE;
-	 	  	          sCommand.Address     = address;
-	 	  	          sCommand.DataMode    = QSPI_DATA_NONE;
-	 	  	          sCommand.DummyCycles = 0;
-
-	 	  	          if (HAL_QSPI_Command_IT(&hqspi, &sCommand) != HAL_OK)
-	 	  	          {
-	 	  	            Error_Handler();
-	 	  	          }
-
-	 	  	          step++;
-	 	  	          break;
-
-	 	  	        case 1:
-	 	  	          if(CmdCplt != 0)
-	 	  	          {
-	 	  	            CmdCplt = 0;
-	 	  	            StatusMatch = 0;
-
-	 	  	            /* Configure automatic polling mode to wait for end of erase ------- */
-	 	  	            QSPI_AutoPollingMemReady(&hqspi);
-
-	 	  	            step++;
-	 	  	          }
-	 	  	          break;
-
-	 	  	        case 2:
-	 	  	          if(StatusMatch != 0)
-	 	  	          {
-	 	  	            StatusMatch = 0;
-	 	  	            TxCplt = 0;
-
-	 	  	            /* Enable write operations ----------------------------------------- */
-	 	  	            QSPI_WriteEnable(&hqspi);
-
-	 	  	            /* Writing Sequence ------------------------------------------------ */
-	 	  	            sCommand.Instruction = QUAD_IN_FAST_PROG_CMD;
-	 	  	            sCommand.AddressMode = QSPI_ADDRESS_1_LINE;
-	 	  	            sCommand.DataMode    = QSPI_DATA_4_LINES;
-	 	  	            sCommand.NbData      = BUFFERSIZE;
-
-	 	  	            if (HAL_QSPI_Command(&hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-	 	  	            {
-	 	  	              Error_Handler();
-	 	  	            }
-
-	 	  	            if (HAL_QSPI_Transmit_IT(&hqspi, aTxBuffer) != HAL_OK)
-	 	  	            {
-	 	  	              Error_Handler();
-	 	  	            }
-
-	 	  	            step++;
-	 	  	          }
-	 	  	          break;
-
-	 	  	        case 3:
-	 	  	          if(TxCplt != 0)
-	 	  	          {
-	 	  	            TxCplt = 0;
-	 	  	            StatusMatch = 0;
-
-	 	  	            /* Configure automatic polling mode to wait for end of program ----- */
-	 	  	            QSPI_AutoPollingMemReady(&hqspi);
-
-	 	  	            step++;
-	 	  	          }
-	 	  	          break;
-
-	 	  	        case 4:
-	 	  	          if(StatusMatch != 0)
-	 	  	          {
-	 	  	            StatusMatch = 0;
-	 	  	            RxCplt = 0;
-
-	 	  	            /* Configure Volatile Configuration register (with new dummy cycles) */
-	 	  	            QSPI_DummyCyclesCfg(&hqspi);
-
-	 	  	            /* Reading Sequence ------------------------------------------------ */
-	 	  	            sCommand.Instruction = QUAD_OUT_FAST_READ_CMD;
-	 	  	            sCommand.DummyCycles = DUMMY_CLOCK_CYCLES_READ_QUAD;
-
-	 	  	            if (HAL_QSPI_Command(&hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-	 	  	            {
-	 	  	              Error_Handler();
-	 	  	            }
-
-	 	  	            if (HAL_QSPI_Receive_IT(&hqspi, aRxBuffer) != HAL_OK)
-	 	  	            {
-	 	  	              Error_Handler();
-	 	  	            }
-	 	  	            step++;
-	 	  	          }
-	 	  	          break;
-
-	 	  	        case 5:
-	 	  	          if (RxCplt != 0)
-	 	  	          {
-	 	  	            RxCplt = 0;
-
-	 	  	            /* Result comparison ----------------------------------------------- */
-	 	  	            for (index = 0; index < BUFFERSIZE; index++)
-	 	  	            {
-	 	  	              if (aRxBuffer[index] != aTxBuffer[index])
-	 	  	              {
-	 	  //	                BSP_LED_On(LED1);
-	 	  	              }
-	 	  	            }
-	 	  //	            BSP_LED_Toggle(LED1);
-
-	 	  	            address += QSPI_PAGE_SIZE;
-	 	  	            if(address >= QSPI_END_ADDR)
-	 	  	            {
-	 	  	              address = 0;
-	 	  	            }
-	 	  	            step = 0;
-	 	  	          }
-	 	  	          break;
-
-	 	  	        default :
-	 	  	          Error_Handler();
-	 	  	      }
-    osDelay(1);
-  }
-  /* USER CODE END 5 */
-}
-
- /**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM6 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
-
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM6) {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
-
-  /* USER CODE END Callback 1 */
-}
 
 /**
   * @brief  This function is executed in case of error occurrence.
@@ -669,11 +316,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1) {
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
